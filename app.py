@@ -9,9 +9,11 @@ import os
 print(">>> Flask app started execution")
 
 app = Flask(__name__)
-CORS(app)
 
-# Load dataset and model at startup, but not embeddings
+# ✅ CORS setup to allow your Netlify frontend
+CORS(app, origins=["https://fastidious-smakager-fe709e.netlify.app"])
+
+# Load dataset
 print(">>> Loading dataset...")
 movies_df = pd.read_csv('movies.csv')
 movies_df['overview'] = movies_df['overview'].fillna('')
@@ -19,6 +21,7 @@ movies_df['genres'] = movies_df['genres'].fillna('')
 movies_df['vote_average'] = pd.to_numeric(movies_df['vote_average'], errors='coerce').fillna(0)
 movies_df['vote_count'] = pd.to_numeric(movies_df['vote_count'], errors='coerce').fillna(0)
 
+# Load model
 print(">>> Loading transformer model...")
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
@@ -33,17 +36,15 @@ def recommend_movies():
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
 
-    # Compute embedding for user input
-    input_embedding = model.encode(user_input)
-
-    # Build embeddings on the fly
+    # Lazy embedding on request
     def build_text_embedding(row):
         text = f"{row['overview']} Genres: {row['genres']}"
         return model.encode(text)
 
-    print(">>> Generating embeddings...")
+    print(">>> Generating embeddings for recommendation...")
     movies_df["embedding"] = movies_df.apply(build_text_embedding, axis=1).tolist()
 
+    input_embedding = model.encode(user_input)
     similarities = cosine_similarity([input_embedding], list(movies_df["embedding"]))[0]
     top_indices = np.argsort(similarities)[::-1][:10]
 
@@ -53,6 +54,7 @@ def recommend_movies():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
